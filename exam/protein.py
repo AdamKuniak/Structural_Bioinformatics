@@ -39,11 +39,12 @@ class BreakChecker():
         return has_breaks
 
 class ProteinMutator():
-    def __init__(self, protein_id, sequence):
+    def __init__(self, protein_id):
         self.id = protein_id
         self.model_name = "facebook/esm2_t33_650M_UR50D"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModelForMaskedLM.from_pretrained(self.model_name)
+
         pdbl = PDBList()
         pdbl.retrieve_pdb_file(self.id, pdir=".", file_format='pdb')
         parser = PDBParser()
@@ -51,10 +52,8 @@ class ProteinMutator():
         ppb = PPBuilder()
 
         pp = ppb.build_peptides(self.structure)
+        # I know there are no breaks and only one chain
         self.sequence = str(pp[0].get_sequence())
-
-        if sequence is not None:
-            self.sequence = sequence
 
     def get_mutation_probs(self):
         """
@@ -63,10 +62,12 @@ class ProteinMutator():
         """
         self.model.eval()
         mask_token = self.tokenizer.mask_token  # token to mask amino acids
-        mutation_list = []
+        mutation_probabilities = []  # list of highest mutational probabilities
+        mutation_options = []  # list of most probable mutations
+        topk = 2
 
         # For every position except the first, I am predicting the probabilities of all amino acids based on the rest of the sequence
-        for i in range(0, len(self.sequence) ):
+        for i in range(0, len(self.sequence)):
             seq_list = list(self.sequence)
             seq_list[i] = mask_token
             masked_sequence = "".join(seq_list)
@@ -79,7 +80,7 @@ class ProteinMutator():
 
             probabilities = torch.softmax(logits, dim=0)
             assert probabilities.shape == (33,)
-            top_2_values, top_2_indices = torch.topk(probabilities, 2)
+            top_2_values, top_2_indices = torch.topk(probabilities, topk)
 
             # Decode
             amino_acids = [self.tokenizer.decode(idx) for idx in top_2_indices]
@@ -87,22 +88,44 @@ class ProteinMutator():
 
             # if the most probable AA is the one in the sequence, I am interested in the second best, otherwise I take the best
             if original_aa == amino_acids[0]:
-                mutation_list.append((amino_acids[1], top_2_values[1].item()))
+                mutation_options.append(amino_acids[1])
+                mutation_probabilities.append(top_2_values[1].item())
             else:
-                mutation_list.append((amino_acids[0], top_2_values[0].item()))
+                mutation_options.append(amino_acids[0])
+                mutation_probabilities.append(top_2_values[0].item())
 
-        return mutation_list
+        return mutation_probabilities, mutation_options
 
-    #def mutate(self)
+    def mutate(self, mutation_probabilities, mutation_options):
+        """
+        Mutates the protein sequence based on the obtained probabilities
+        :return: list of mutated sequences of different mutational probability
+        """
+        mutated_sequences = []
+        mutation_probs = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+
+        for prob in mutation_probs:
+            n_mutations = int(prob * len(mutation_options))  # number of mutations I will perform
+            mut_positions = np.argpartition(mutation_probabilities, -n_mutations)[-n_mutations:]  # get the highest probability positions
+            mutated_seq_list = list(self.sequence)
+
+            # Mutate
+            for position in mut_positions:
+                mutated_seq_list[position] = mutation_options[position]
+
+            mutated_sequences.append("".join(mutated_seq_list))
+
+        return mutated_sequences
 
 
 
 def main():
     protein_id = "2igd"
     #BreakChecker(protein_id)
-    Mutator = ProteinMutator(protein_id, "MKVLELTDNDGTLTE")
-    list = Mutator.get_mutation_probs()
-    print(list)
+    Mutator = ProteinMutator(protein_id)
+    probs, options = Mutator.get_mutation_probs()
+    mutated_sequences = Mutator.mutate(probs, options)
+    print(mutated_sequences)
 
 
 if __name__ == '__main__':
