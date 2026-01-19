@@ -96,17 +96,25 @@ class ProteinMutator():
 
         return mutation_probabilities, mutation_options
 
-    def mutate(self, mutation_probabilities, mutation_options):
+    def mutate(self, mutation_probabilities, mutation_options, mode="deterministic"):
         """
         Mutates the protein sequence based on the obtained probabilities
+        :param mode: deterministic or random; deterministic picks the highest probability, random picks the randomly
         :return: list of mutated sequences of different mutational probability
         """
+        # Set specific seed
+        np.random.seed(42)
         mutated_sequences = []
-        mutation_probs = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+        mutation_probs = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7]
 
         for prob in mutation_probs:
             n_mutations = int(prob * len(mutation_options))  # number of mutations I will perform
-            mut_positions = np.argpartition(mutation_probabilities, -n_mutations)[-n_mutations:]  # get the highest probability positions
+            if mode == "deterministic":
+                mut_positions = np.argpartition(mutation_probabilities, -n_mutations)[-n_mutations:]  # get the highest probability positions
+            elif mode == "random":
+                mut_positions = np.random.choice(len(mutation_options), n_mutations, replace=False)
+            else:
+                raise ValueError("Mode must be either deterministic or random")
             mutated_seq_list = list(self.sequence)
 
             # Mutate
@@ -114,6 +122,8 @@ class ProteinMutator():
                 mutated_seq_list[position] = mutation_options[position]
 
             mutated_sequences.append("".join(mutated_seq_list))
+            with open(f"mutated_sequences/mutated_sequence_{prob}.txt", "w") as f:
+                f.write("".join(mutated_seq_list))
 
         return mutated_sequences
 
@@ -124,7 +134,7 @@ def main():
     #BreakChecker(protein_id)
     Mutator = ProteinMutator(protein_id)
     probs, options = Mutator.get_mutation_probs()
-    mutated_sequences = Mutator.mutate(probs, options)
+    mutated_sequences = Mutator.mutate(probs, options, "deterministic")
     print(mutated_sequences)
 
 
