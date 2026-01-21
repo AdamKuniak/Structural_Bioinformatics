@@ -100,13 +100,14 @@ class Nussimov():
         return bracket_string
 
 def main():
-    A = Nussimov("AAAGGCCCGACGGCGGAGCCAAAAAAAACGCCAGGCGAAAAAAAAAAAAAAAAA", 3)
+    sequence = "AAAGGCCCGACGGCGGAGCCAAAAAAAACGCCCGGCGAAAAAAAAAAAAAAAAA"
+    A = Nussimov(sequence, 3)
     M = A.nussimov_forward()
 
     for i in range(M.shape[0]):
         print()
         for j in range(M.shape[1]):
-            print(M[i, j], end=" ")
+            print(M[i, j], end="  ")
 
     pairs = A.nussimov_backtrack()
     bracket_string = A.pairs_to_brackets(pairs)
