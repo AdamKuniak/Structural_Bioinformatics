@@ -2,17 +2,25 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from Bio.PDB import PDBList, PDBParser, PPBuilder
+import os
 
 class BreakChecker():
     """
     A class to check if a given protein has breaks in it chains
     """
     def __init__(self, protein_id: str):
+        assert isinstance(protein_id, str) and len(protein_id) == 4, "Invalid PDB ID format."
         self.id = protein_id
+
         pdbl = PDBList()
-        pdbl.retrieve_pdb_file(self.id, pdir=".", file_format='pdb')
+        pdbl.retrieve_pdb_file(self.id, pdir="pdb", file_format='pdb')
+        self.file_path = f"pdb/pdb{self.id}.ent"
+        # check that the file exists
+        if not os.path.exists(self.file_path):
+            raise FileNotFoundError(f"Could not download or find file: {self.file_path}")
+
         parser = PDBParser()
-        self.structure = parser.get_structure(self.id, f"pdb{self.id}.ent")
+        self.structure = parser.get_structure(self.id, self.file_path)
 
         if self.has_chain_brakes():
             print(f"Protein with PDB ID {self.id} has chain brakes")
@@ -24,6 +32,8 @@ class BreakChecker():
         :param protein: PDB id of the protein to check for chain brakes
         :return: Boolean of whether the protein has chain brakes or not
         """
+        assert self.structure is not None, "No structure"
+
         ppb = PPBuilder()
         has_breaks = False
 
@@ -39,18 +49,27 @@ class BreakChecker():
 
 class ProteinMutator():
     def __init__(self, protein_id):
+        assert isinstance(protein_id, str) and len(protein_id) == 4, "Invalid PDB ID format."
         self.id = protein_id
+
         self.model_name = "facebook/esm2_t33_650M_UR50D"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModelForMaskedLM.from_pretrained(self.model_name)
 
         pdbl = PDBList()
-        pdbl.retrieve_pdb_file(self.id, pdir=".", file_format='pdb')
+        pdbl.retrieve_pdb_file(self.id, pdir="pdb", file_format='pdb')
+        self.file_path = f"pdb/pdb{self.id}.ent"
+
+        if not os.path.exists(self.file_path):
+            raise FileNotFoundError(f"Could not download or find file: {self.file_path}")
+
         parser = PDBParser()
-        self.structure = parser.get_structure(self.id, f"pdb{self.id}.ent")
+        self.structure = parser.get_structure(self.id, self.file_path)
         ppb = PPBuilder()
 
         pp = ppb.build_peptides(self.structure)
+        assert len(pp) > 0, f"No peptides found in protein {self.id}."
+
         # I know there are no breaks and only one chain
         self.sequence = str(pp[0].get_sequence())
 
@@ -104,8 +123,7 @@ class ProteinMutator():
         # Set specific seed
         np.random.seed(42)
         mutated_sequences = []
-        # mutation_probs = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-        mutation_probs = [0.5]
+        mutation_probs = [0.05]
 
         for prob in mutation_probs:
             n_mutations = int(prob * len(mutation_options))  # number of mutations I will perform
@@ -125,19 +143,17 @@ class ProteinMutator():
                     mutated_seq_list[position] = np.random.choice(['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y'])
 
             mutated_sequences.append("".join(mutated_seq_list))
-            with open(f"mutated_sequences/{mode}/seq_p_{prob}.txt", "w") as f:
+            with open(f"sequences/mutated/{mode}/seq_p_{prob}.txt", "w") as f:
                 f.write("".join(mutated_seq_list))
 
         return mutated_sequences
 
-
 def main():
     protein_id = "2igd"
-    #BreakChecker(protein_id)
+    BreakChecker(protein_id)
     Mutator = ProteinMutator(protein_id)
     probs, options = Mutator.get_mutation_probs()
-    mutated_sequences = Mutator.mutate(probs, options, "random")
-    print(mutated_sequences)
+    mutated_sequences = Mutator.mutate(probs, options)
 
 
 if __name__ == '__main__':
