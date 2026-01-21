@@ -11,6 +11,7 @@ class Nussimov():
         """
         self.sequence = sequence
         self.L = L
+        self.matrix = None
 
     def is_pairable(self, nuc_i, nuc_j):
         """
@@ -37,26 +38,21 @@ class Nussimov():
 
         for offset in range(self.L + 1, n):
             for i in range(n - offset):
-                # print((i, i + offset), end="\n")
                 j = i + offset
+
+                # unpaired
                 left = self.matrix[i, j - 1]
                 bottom = self.matrix[i + 1, j]
-                best = np.maximum(left, bottom)
+
+                diag = 0
                 if self.is_pairable(self.sequence[i], self.sequence[j]):
                     diag = self.matrix[i + 1, j - 1] + 1
-                    best = np.maximum(best, diag)
-                else:
-                    continue
 
-                best_bif = 0
-                for k in range(i, j):
-                    bif = self.matrix[i, k] + self.matrix[k + 1, j]
-                    if bif > best_bif:
-                        best_bif = bif
+                bif = 0
+                for k in range(i + 1, j):
+                    bif = max(bif, self.matrix[i, k] + self.matrix[k + 1, j])
 
-                best = np.maximum(best, best_bif)
-
-                self.matrix[i, i + offset] = best
+                self.matrix[i, j] = max(left, bottom, diag, bif)
 
         return self.matrix
 
@@ -104,7 +100,7 @@ class Nussimov():
         return bracket_string
 
 def main():
-    A = Nussimov("GGGAAACCCGGGAAACCC", 3)
+    A = Nussimov("AAAGGCCCGACGGCGGAGCCAAAAAAAACGCCAGGCGAAAAAAAAAAAAAAAAA", 3)
     M = A.nussimov_forward()
 
     for i in range(M.shape[0]):
